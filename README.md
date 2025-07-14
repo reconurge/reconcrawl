@@ -88,6 +88,8 @@ Available options:
 - `--max-pages`: Maximum number of pages to crawl (default: 50)
 - `--timeout`: Request timeout in seconds (default: 30)
 - `--delay`: Delay between requests in seconds (default: 1.0)
+- `--verbose`: Print every page being searched
+- `--recursive`: Follow every internal link (default: only crawl the final page after redirects)
 
 ---
 
@@ -116,7 +118,9 @@ crawler = Crawler(
     url="https://example.com",
     max_pages=50,
     timeout=30,
-    delay=1.0
+    delay=1.0,
+    verbose=False,
+    recursive=False
 )
 
 # Fetch the URL and follow redirects
