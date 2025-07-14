@@ -87,6 +87,68 @@ class TestCrawler(unittest.TestCase):
         self.assertIn("+44 20 7946 0958", crawler._extract_phones("Call +44 20 7946 0958"))
         # Should NOT match numbers with no separators
         self.assertEqual(crawler._extract_phones("9876543210"), [])
+    
+    def test_international_phone_numbers(self):
+        """Test international phone number extraction with various country codes."""
+        crawler = Crawler("https://example.com")
+        
+        # Test various international formats
+        # French numbers (+33)
+        self.assertIn("+33 1 42 86 12 34", crawler._extract_phones("Contact: +33 1 42 86 12 34"))
+        self.assertIn("+33 1 42 86 12 34", crawler._extract_phones("Phone: +33.1.42.86.12.34"))
+        self.assertIn("+33 1 42 86 12 34", crawler._extract_phones("Call +33-1-42-86-12-34"))
+        
+        # UK numbers (+44)
+        self.assertIn("+44 20 7946 0958", crawler._extract_phones("UK office: +44 20 7946 0958"))
+        self.assertIn("+44 20 7946 0958", crawler._extract_phones("London: +44.20.7946.0958"))
+        self.assertIn("+44 20 7946 0958", crawler._extract_phones("Contact: +44-20-7946-0958"))
+        
+        # German numbers (+49)
+        self.assertIn("+49 30 12345678", crawler._extract_phones("Berlin: +49 30 12345678"))
+        self.assertIn("+49 30 12345678", crawler._extract_phones("Germany: +49.30.12345678"))
+        self.assertIn("+49 30 12345678", crawler._extract_phones("Call: +49-30-12345678"))
+        
+        # Spanish numbers (+34)
+        self.assertIn("+34 91 123 45 67", crawler._extract_phones("Madrid: +34 91 123 45 67"))
+        self.assertIn("+34 91 123 45 67", crawler._extract_phones("Spain: +34.91.123.45.67"))
+        
+        # Italian numbers (+39)
+        self.assertIn("+39 02 12345678", crawler._extract_phones("Milan: +39 02 12345678"))
+        self.assertIn("+39 02 12345678", crawler._extract_phones("Italy: +39.02.12345678"))
+        
+        # Japanese numbers (+81)
+        self.assertIn("+81 3 1234 5678", crawler._extract_phones("Tokyo: +81 3 1234 5678"))
+        self.assertIn("+81 3 1234 5678", crawler._extract_phones("Japan: +81.3.1234.5678"))
+        
+        # Australian numbers (+61)
+        self.assertIn("+61 2 1234 5678", crawler._extract_phones("Sydney: +61 2 1234 5678"))
+        self.assertIn("+61 2 1234 5678", crawler._extract_phones("Australia: +61.2.1234.5678"))
+        
+        # Canadian numbers (+1) - different from US
+        self.assertIn("+1 416 123 4567", crawler._extract_phones("Toronto: +1 416 123 4567"))
+        self.assertIn("+1 416 123 4567", crawler._extract_phones("Canada: +1.416.123.4567"))
+        
+        # Numbers with parentheses
+        self.assertIn("+33 1 42 86 12 34", crawler._extract_phones("Paris: +33 (1) 42 86 12 34"))
+        self.assertIn("+44 20 7946 0958", crawler._extract_phones("London: +44 (20) 7946 0958"))
+        
+        # Should NOT match invalid international formats
+        self.assertEqual(crawler._extract_phones("Invalid: +12345678901234567890"), [])
+        self.assertEqual(crawler._extract_phones("Too short: +123"), [])
+        self.assertEqual(crawler._extract_phones("No separators: +123456789012345"), [])
+    
+    def test_clean_international_phone(self):
+        """Test the international phone number cleaning function."""
+        crawler = Crawler("https://example.com")
+        
+        # Test various cleaning scenarios
+        self.assertEqual(crawler._clean_international_phone("+33 1 42 86 12 34"), "+33 1 42 86 12 34")
+        self.assertEqual(crawler._clean_international_phone("+33.1.42.86.12.34"), "+33 1 42 86 12 34")
+        self.assertEqual(crawler._clean_international_phone("+33-1-42-86-12-34"), "+33 1 42 86 12 34")
+        self.assertEqual(crawler._clean_international_phone("+33 (1) 42 86 12 34"), "+33 1 42 86 12 34")
+        self.assertEqual(crawler._clean_international_phone("+33  1  42  86  12  34"), "+33 1 42 86 12 34")
+        self.assertEqual(crawler._clean_international_phone("+44.20.7946.0958"), "+44 20 7946 0958")
+        self.assertEqual(crawler._clean_international_phone("+44-20-7946-0958"), "+44 20 7946 0958")
 
 
 if __name__ == '__main__':

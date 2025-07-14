@@ -139,42 +139,54 @@ class Crawler:
         except Exception:
             return []
     
+    def _clean_international_phone(self, phone: str) -> str:
+        """Clean and standardize international phone number format."""
+        try:
+            # Remove extra whitespace
+            phone = re.sub(r'\s+', ' ', phone.strip())
+            # Normalize separators - replace dashes, dots, and multiple spaces with a single space
+            phone = re.sub(r'[-.]+', ' ', phone)
+            phone = re.sub(r'\s+', ' ', phone)
+            # Remove parentheses but keep the content
+            phone = re.sub(r'[()]', '', phone)
+            # Clean up any remaining extra spaces
+            phone = re.sub(r'\s+', ' ', phone).strip()
+            return phone
+        except Exception:
+            return phone
+
     def _extract_phones(self, text: str) -> List[str]:
         """Extract phone numbers from text content."""
         try:
             phones = []
-            
-            # More specific patterns with word boundaries and context validation
+            # Patterns for US and international numbers
             patterns = [
                 # US phone numbers with country code
                 r'\b\+1[-.\s]?\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})\b',
                 # US phone numbers without country code (but with context)
                 r'\b\(?([0-9]{3})\)?[-.\s]?([0-9]{3})[-.\s]?([0-9]{4})\b',
-                # International format (more flexible)
-                r'\+[1-9]\d{0,3}[-.\s]?([0-9]{2,4})[-.\s]?([0-9]{2,4})[-.\s]?([0-9]{2,4})\b',
+                # International format: +country (area) xx xx xx ...
+                r'\+(\d{1,4})[\s.-]?(\(?\d{1,4}\)?[\s.-]?){2,6}\d{2,4}\b',
             ]
-            
-            for pattern in patterns:
-                # Use finditer to get the actual matched substring
+            for idx, pattern in enumerate(patterns):
                 for match_obj in re.finditer(pattern, text, re.IGNORECASE):
-                    original_match = match_obj.group(0)  # The actual matched substring
-                    
+                    original_match = match_obj.group(0)
                     if self._is_valid_phone(original_match, text):
-                        # Format the phone number consistently
-                        if pattern == patterns[2]:  # International format
-                            # Keep international format as is
-                            phone = original_match
-                        else:
-                            # For US numbers, extract groups and format consistently
+                        if idx == 0:  # US with country code
                             groups = match_obj.groups()
                             if len(groups) == 3:
                                 phone = f"+1-{groups[0]}-{groups[1]}-{groups[2]}"
                             else:
                                 phone = original_match
-                        
+                        elif idx == 1:  # US without country code
+                            groups = match_obj.groups()
+                            if len(groups) == 3:
+                                phone = f"+1-{groups[0]}-{groups[1]}-{groups[2]}"
+                            else:
+                                phone = original_match
+                        else:  # International
+                            phone = self._clean_international_phone(original_match)
                         phones.append(phone)
-            
-            # Remove duplicates while preserving order
             return list(dict.fromkeys(phones))
         except Exception:
             return []
@@ -184,19 +196,24 @@ class Crawler:
         try:
             # Remove common separators and get just digits
             digits = re.sub(r'[^\d]', '', phone)
-            
             # Must have 10-15 digits (reasonable for phone numbers)
             if len(digits) < 10 or len(digits) > 15:
                 return False
-            
             # Reject if the phone value is just a sequence of digits (no separators)
             if re.fullmatch(r'\d{10,15}', phone):
                 return False
-            
             # Require at least one separator (space, dash, dot, parenthesis, or plus)
             if not re.search(r'[\s\-\.\(\)\+]', phone):
                 return False
-            
+            # For international numbers, require at least one separator after the country code
+            if phone.startswith('+'):
+                # Remove the country code
+                m = re.match(r'(\+\d{1,4})(.*)', phone)
+                if m:
+                    after_cc = m.group(2)
+                    # There must be at least one separator in the rest of the number
+                    if not re.search(r'[\s\-\.\(\)]', after_cc):
+                        return False
             return True
         except Exception:
             return False
