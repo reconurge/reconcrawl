@@ -2,7 +2,7 @@ import requests
 import re
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-from typing import List, Set, Dict, Any, Optional
+from typing import List, Set, Dict
 from dataclasses import dataclass
 import time
 
@@ -40,9 +40,50 @@ class Crawler:
         self.verbose = verbose
         self.recursive = recursive
         self.final_url = url
-        self.visited_urls: Set[str] = set()
+        self.visited_urls: Set[str] = set()  # Stores normalized URLs to prevent duplicate visits
         self.results: List[TrackingItem] = []
+        self._seen_values: Set[str] = set()  # Track seen values to prevent duplicates
         
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL for deduplication by removing fragments, query params, and trailing slashes."""
+        try:
+            parsed = urlparse(url)
+            # Remove fragment and query parameters
+            normalized = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            # Remove trailing slash except for root path
+            if normalized.endswith('/') and len(normalized) > len(f"{parsed.scheme}://{parsed.netloc}"):
+                normalized = normalized.rstrip('/')
+            return normalized.lower()
+        except Exception:
+            return url.lower()
+
+    def _is_duplicate(self, item_type: str, value: str) -> bool:
+        """Check if a value has already been seen (case-insensitive for emails, normalized for phones)."""
+        # For emails, normalize to lowercase for comparison
+        if item_type == "email":
+            normalized_value = value.lower()
+        else:
+            # For phones, normalize by removing all non-digit characters
+            normalized_value = self._normalize_phone_for_dedup(value)
+        
+        return normalized_value in self._seen_values
+    
+    def _add_result(self, item_type: str, value: str, source_url: str):
+        """Add a result if it's not a duplicate."""
+        if not self._is_duplicate(item_type, value):
+            # For emails, normalize to lowercase for tracking
+            if item_type == "email":
+                self._seen_values.add(value.lower())
+            else:
+                # For phones, normalize by removing all non-digit characters
+                self._seen_values.add(self._normalize_phone_for_dedup(value))
+            
+            self.results.append(TrackingItem(
+                type=item_type,
+                value=value,
+                source_url=source_url
+            ))
+    
     def _ensure_protocol(self, url: str) -> str:
         """Ensure URL has a protocol."""
         if not url.startswith(('http://', 'https://')):
@@ -79,8 +120,11 @@ class Crawler:
                 # Resolve relative URLs
                 absolute_url = urljoin(base_url, href)
                 
-                # Check if it's an internal link and not already visited
-                if self._is_same_domain(absolute_url, base_url) and absolute_url not in self.visited_urls:
+                # Normalize URL for deduplication
+                normalized_url = self._normalize_url(absolute_url)
+                
+                # Check if it's an internal link and not already visited (using normalized URL)
+                if self._is_same_domain(absolute_url, base_url) and normalized_url not in self.visited_urls:
                     # Filter out common non-content URLs
                     if not any(exclude in absolute_url.lower() for exclude in [
                         '#', 'javascript:', 'mailto:', 'tel:', '.pdf', '.doc', '.docx', 
@@ -155,6 +199,15 @@ class Crawler:
         except Exception:
             return phone
 
+    def _normalize_phone_for_dedup(self, phone: str) -> str:
+        """Normalize phone number for deduplication by removing all non-digit characters."""
+        try:
+            # Remove all non-digit characters for comparison
+            digits_only = re.sub(r'[^\d]', '', phone)
+            return digits_only
+        except Exception:
+            return phone
+
     def _extract_phones(self, text: str) -> List[str]:
         """Extract phone numbers from text content."""
         try:
@@ -226,7 +279,7 @@ class Crawler:
                 time.sleep(self.delay)
             
             if self.verbose:
-                print(f"🔍 Searching: {url}")
+                print(f"Searching: {url}")
             
             # Get the page
             response = requests.get(url, verify=False, timeout=self.timeout)
@@ -297,10 +350,13 @@ class Crawler:
             while urls_to_visit and page_count < self.max_pages:
                 current_url = urls_to_visit.pop()
                 
-                if current_url in self.visited_urls:
+                # Normalize URL for deduplication
+                normalized_url = self._normalize_url(current_url)
+                
+                if normalized_url in self.visited_urls:
                     continue
                     
-                self.visited_urls.add(current_url)
+                self.visited_urls.add(normalized_url)
                 page_count += 1
                 
                 # Process the page
@@ -308,19 +364,11 @@ class Crawler:
                 
                 # Add emails to results
                 for email in page_data["emails"]:
-                    self.results.append(TrackingItem(
-                        type="email",
-                        value=email,
-                        source_url=current_url
-                    ))
+                    self._add_result("email", email, current_url)
                 
                 # Add phones to results
                 for phone in page_data["phones"]:
-                    self.results.append(TrackingItem(
-                        type="phone",
-                        value=phone,
-                        source_url=current_url
-                    ))
+                    self._add_result("phone", phone, current_url)
                 
                 # Extract internal links for further crawling
                 if page_count < self.max_pages:
@@ -334,25 +382,22 @@ class Crawler:
                         continue
         else:
             # Non-recursive mode: only crawl the final page
-            self.visited_urls.add(self.final_url)
+            normalized_url = self._normalize_url(self.final_url)
+            self.visited_urls.add(normalized_url)
             page_data = self._process_page(self.final_url)
             
             # Add emails to results
             for email in page_data["emails"]:
-                self.results.append(TrackingItem(
-                    type="email",
-                    value=email,
-                    source_url=self.final_url
-                ))
+                self._add_result("email", email, self.final_url)
             
             # Add phones to results
             for phone in page_data["phones"]:
-                self.results.append(TrackingItem(
-                    type="phone",
-                    value=phone,
-                    source_url=self.final_url
-                ))
+                self._add_result("phone", phone, self.final_url)
     
     def get_results(self) -> List[TrackingItem]:
-        """Get the extracted results."""
+        """Get the extracted results (already deduplicated)."""
+        return self.results
+
+    def get_deduplicated_results(self) -> List[TrackingItem]:
+        """Get the extracted results with duplicates removed (alias for get_results)."""
         return self.results

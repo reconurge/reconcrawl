@@ -61,21 +61,21 @@ python3 reconcrawl/cli.py https://example.com
 Sample output:
 
 ```
-🔗 Fetching content from: https://example.com
-↪️ Final URL after redirects: https://www.example.com
-🔍 Extracting emails and phone numbers...
+Fetching content from: https://example.com
+Final URL after redirects: https://www.example.com
+Extracting emails and phone numbers...
 
-🔍 Found items:
+Found items:
 
-📧 Emails (2):
+Emails (2):
   - contact@example.com
   - support@example.com
     Found on: https://www.example.com/contact
 
-📞 Phone numbers (1):
+Phone numbers (1):
   - +1-555-123-4567
 
-📊 Summary: 2 emails, 1 phone numbers found across 3 pages
+Summary: 2 emails, 1 phone numbers found across 3 pages
 ```
 
 For help and additional options:

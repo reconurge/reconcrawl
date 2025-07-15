@@ -150,6 +150,39 @@ class TestCrawler(unittest.TestCase):
         self.assertEqual(crawler._clean_international_phone("+44.20.7946.0958"), "+44 20 7946 0958")
         self.assertEqual(crawler._clean_international_phone("+44-20-7946-0958"), "+44 20 7946 0958")
 
+    def test_deduplication(self):
+        """Test that duplicates are properly removed."""
+        crawler = Crawler("https://example.com")
+        
+        # Test email deduplication (case-insensitive)
+        self.assertFalse(crawler._is_duplicate("email", "test@example.com"))
+        crawler._add_result("email", "test@example.com", "https://example.com/page1")
+        self.assertTrue(crawler._is_duplicate("email", "test@example.com"))
+        self.assertTrue(crawler._is_duplicate("email", "TEST@EXAMPLE.COM"))
+        self.assertTrue(crawler._is_duplicate("email", "Test@Example.com"))
+        
+        # Test phone deduplication (normalized by removing non-digits)
+        # Use phone numbers that should be considered the same (same digits)
+        self.assertFalse(crawler._is_duplicate("phone", "(555) 123-4567"))
+        crawler._add_result("phone", "(555) 123-4567", "https://example.com/page1")
+        self.assertTrue(crawler._is_duplicate("phone", "(555) 123-4567"))
+        self.assertTrue(crawler._is_duplicate("phone", "555.123.4567"))
+        self.assertTrue(crawler._is_duplicate("phone", "555 123 4567"))
+        self.assertTrue(crawler._is_duplicate("phone", "5551234567"))
+        
+        # Test that different phone numbers are not considered duplicates
+        self.assertFalse(crawler._is_duplicate("phone", "(555) 987-6543"))
+        
+        # Test that different emails are not considered duplicates
+        self.assertFalse(crawler._is_duplicate("email", "different@example.com"))
+        
+        # Verify results contain only unique items
+        self.assertEqual(len(crawler.results), 2)  # One email, one phone
+        email_values = [item.value for item in crawler.results if item.type == "email"]
+        phone_values = [item.value for item in crawler.results if item.type == "phone"]
+        self.assertEqual(len(email_values), 1)
+        self.assertEqual(len(phone_values), 1)
+
 
 if __name__ == '__main__':
     unittest.main()
