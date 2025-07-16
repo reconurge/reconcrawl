@@ -15,6 +15,7 @@ def cli():
     parser.add_argument("--timeout", "-t", type=int, default=30, help="Request timeout in seconds (default: 30)")
     parser.add_argument("--delay", "-d", type=float, default=1.0, help="Delay between requests in seconds (default: 1.0)")
     parser.add_argument("--verbose", "-v", action="store_true", help="Print every page being searched")
+    parser.add_argument("--verify_ssl", "-vssl", action="store_true", help="Whether to verify SSL certificates (default: True)")
     parser.add_argument("--recursive", "-r", action="store_true", help="Follow every internal link (default: only crawl the final page after redirects)")
     args = parser.parse_args()
 
@@ -25,7 +26,8 @@ def cli():
         timeout=args.timeout,
         delay=args.delay,
         verbose=args.verbose,
-        recursive=args.recursive
+        recursive=args.recursive,
+        verify_ssl=args.verify_ssl
     )
     
     try:

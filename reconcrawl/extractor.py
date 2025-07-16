@@ -6,9 +6,6 @@ from typing import List, Set, Dict
 from dataclasses import dataclass
 import time
 
-# Disable SSL warnings
-requests.packages.urllib3.disable_warnings()
-
 
 @dataclass
 class TrackingItem:
@@ -21,7 +18,7 @@ class TrackingItem:
 class Crawler:
     """A web crawler that extracts emails and phone numbers from websites."""
     
-    def __init__(self, url: str, max_pages: int = 50, timeout: int = 30, delay: float = 1.0, verbose: bool = False, recursive: bool = False):
+    def __init__(self, url: str, max_pages: int = 50, timeout: int = 30, delay: float = 1.0, verbose: bool = False, recursive: bool = False, verify_ssl: bool = True):
         """
         Initialize the crawler.
         
@@ -32,6 +29,7 @@ class Crawler:
             delay: Delay between requests in seconds
             verbose: Print every page being searched
             recursive: Follow every internal link (default: only crawl the final page after redirects)
+            verify_ssl: Whether to verify SSL certificates (default: True)
         """
         self.url = url
         self.max_pages = max_pages
@@ -39,6 +37,7 @@ class Crawler:
         self.delay = delay
         self.verbose = verbose
         self.recursive = recursive
+        self.verify_ssl = verify_ssl
         self.final_url = url
         self.visited_urls: Set[str] = set()  # Stores normalized URLs to prevent duplicate visits
         self.results: List[TrackingItem] = []
@@ -93,7 +92,7 @@ class Crawler:
     def _get_final_url(self, url: str) -> str:
         """Follow redirects to get the final URL."""
         try:
-            response = requests.head(url, verify=False, timeout=self.timeout, allow_redirects=True)
+            response = requests.head(url, verify=self.verify_ssl, timeout=self.timeout, allow_redirects=True)
             return response.url
         except Exception:
             return url
@@ -164,7 +163,7 @@ class Crawler:
             # If it looks like HTML, also try to parse it with BeautifulSoup
             if '<' in html and '>' in html:
                 try:
-                    soup = BeautifulSoup(html, 'lxml')
+                    soup = BeautifulSoup(html, 'html.parser')
                     mailto_links = soup.find_all('a', href=re.compile(r'^mailto:', re.IGNORECASE))
                     
                     for link in mailto_links:
@@ -282,7 +281,7 @@ class Crawler:
                 print(f"Searching: {url}")
             
             # Get the page
-            response = requests.get(url, verify=False, timeout=self.timeout)
+            response = requests.get(url, verify=self.verify_ssl, timeout=self.timeout)
             
             # Only proceed if we get a 200 status code
             if response.status_code != 200:
@@ -292,7 +291,7 @@ class Crawler:
             
             # Parse HTML content
             html_content = response.text
-            soup = BeautifulSoup(html_content, 'lxml')
+            soup = BeautifulSoup(html_content, 'html.parser')
             visible_text = soup.get_text(separator=' ')
             
             # Extract emails from both HTML content and visible text
@@ -373,9 +372,9 @@ class Crawler:
                 # Extract internal links for further crawling
                 if page_count < self.max_pages:
                     try:
-                        response = requests.get(current_url, verify=False, timeout=self.timeout)
+                        response = requests.get(current_url, verify=self.verify_ssl, timeout=self.timeout)
                         if response.status_code == 200:
-                            soup = BeautifulSoup(response.text, 'lxml')
+                            soup = BeautifulSoup(response.text, 'html.parser')
                             new_links = self._extract_internal_links(soup, current_url)
                             urls_to_visit.update(new_links)
                     except Exception:
